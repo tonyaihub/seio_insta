@@ -4,3 +4,4 @@ sqlalchemy
 openai
 pillow
 python-dotenv
+requests
