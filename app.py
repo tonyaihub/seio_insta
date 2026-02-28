@@ -1,85 +1,65 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime
-from PIL import Image
+from modules.ai_processor import ContentEngine
+from io import BytesIO
 
-# Настройка страницы
-st.set_page_config(page_title="SeiO: Insta Edition", layout="wide", page_icon="📸")
+st.set_page_config(page_title="SeiO: Premium Insta Engine", layout="wide")
 
-# --- СТИЛИЗАЦИЯ (Custom CSS) ---
-st.markdown("""
-    <style>
-    .insta-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        margin-top: 20px;
-    }
-    .grid-item {
-        aspect-ratio: 1 / 1;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        overflow: hidden;
-        background-color: #f0f2f6;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+st.sidebar.title("🚀 SeiO v3.5")
+api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+account_name = st.sidebar.text_input("Ваш @никнейм", placeholder="username")
 
-# --- ИНТЕРФЕЙС (Sidebar) ---
-st.sidebar.title("🚀 SeiO Insta")
-menu = st.sidebar.radio("Меню", ["Визуальный план", "Генератор контента", "Аналитика", "Настройки"])
+# Выбор шрифта в сайдбаре
+selected_font = st.sidebar.selectbox(
+    "Выберите шрифт для визуала:",
+    ["Montserrat", "Bebas Neue", "Inter", "Oswald"]
+)
 
-# --- МОДУЛЬ 1: ВИЗУАЛЬНЫЙ ПЛАН (GRID) ---
-if menu == "Визуальный план":
-    st.header("🖼 Планировщик ленты")
-    
-    # Имитация данных из БД
-    posts = [
-        {"id": 1, "img": "https://via.placeholder.com/400/FF5733/fff", "status": "Опубликовано"},
-        {"id": 2, "img": "https://via.placeholder.com/400/33FF57/fff", "status": "Опубликовано"},
-        {"id": 3, "img": "https://via.placeholder.com/400/3357FF/fff", "status": "Запланировано"},
-        {"id": 4, "img": "https://via.placeholder.com/400/F333FF/fff", "status": "Черновик"},
-    ]
+if api_key:
+    engine = ContentEngine(api_key)
+    tab_trend, tab_create = st.tabs(["🔥 Радар Трендов", "🎨 Дизайн-Студия"])
 
-    # Отображение сетки 3хN
-    cols = st.columns(3)
-    for idx, post in enumerate(posts):
-        with cols[idx % 3]:
-            st.image(post['img'], use_column_width=True)
-            st.caption(f"Статус: {post['status']}")
-            if st.button(f"Правка #{post['id']}", key=f"edit_{post['id']}"):
-                st.info(f"Редактируем пост {post['id']}")
-
-    st.divider()
-    st.button("➕ Добавить пост в сетку")
-
-# --- МОДУЛЬ 2: ГЕНЕРАТОР КОНТЕНТА ---
-elif menu == "Генератор контента":
-    st.header("✍️ AI Креатор")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.subheader("Настройки идеи")
-        topic = st.text_input("О чем будет пост/Reels?", placeholder="Например: 5 ошибок в дизайне интерьера")
-        format_type = st.selectbox("Формат", ["Reels (сценарий)", "Пост в ленту", "Цепочка Stories"])
-        tone = st.select_slider("Тон", options=["Дружелюбный", "Экспертный", "Провокационный"])
+    with tab_create:
+        col1, col2 = st.columns([1, 1])
         
-        if st.button("Сгенерировать концепт ✨"):
-            with st.spinner('Искин SeiO думает...'):
-                # Здесь будет вызов из ai_logic.py
-                st.session_state['ai_result'] = "Вот ваш крутой сценарий для Reels..." 
+        with col1:
+            raw_input = st.text_area("Тема или текст поста:", height=150)
+            if st.button("Сгенерировать идею и текст"):
+                with st.spinner("Работаю..."):
+                    post = engine.professional_rewrite(raw_input, "Эксперт")
+                    hooks = engine.generate_visual_hooks(post)
+                    st.session_state['final_text'] = post
+                    # Берем первую строку из предложенных хуков как основной заголовок
+                    st.session_state['suggested_hook'] = hooks.split('\n')[0].strip('12345. ')
 
-    with col2:
-        st.subheader("Результат")
-        if 'ai_result' in st.session_state:
-            st.write(st.session_state['ai_result'])
-            st.button("💾 Сохранить в черновики")
-            st.button("🎨 Создать обложку (DALL-E 3)")
+            if 'final_text' in st.session_state:
+                st.divider()
+                # Поле для редактирования текста на картинке
+                image_title = st.text_input("Текст на изображении (можно изменить):", 
+                                          value=st.session_state.get('suggested_hook', ""))
+                
+                if st.button("Создать финальный пост с обложкой 📸"):
+                    if not account_name:
+                        st.error("Укажите никнейм в боковом меню!")
+                    else:
+                        with st.spinner("Генерирую фон и накладываю шрифт..."):
+                            bg_url = engine.generate_image(st.session_state['final_text'])
+                            final_img = engine.overlay_text(bg_url, image_title, account_name, selected_font)
+                            st.session_state['processed_img'] = final_img
 
-# --- МОДУЛЬ 3: НАСТРОЙКИ ---
-elif menu == "Настройки":
-    st.header("⚙️ Подключение аккаунтов")
-    st.text_input("OpenAI API Key", type="password")
-    st.text_input("Instagram Business ID")
-    st.button("Проверить соединение")
+        with col2:
+            if 'final_text' in st.session_state:
+                if 'processed_img' in st.session_state:
+                    st.image(st.session_state['processed_img'], use_container_width=True)
+                    
+                    # Подготовка к скачиванию
+                    buf = BytesIO()
+                    st.session_state['processed_img'].save(buf, format="JPEG", quality=95)
+                    st.download_button(
+                        label="📥 Скачать готовый пост",
+                        data=buf.getvalue(),
+                        file_name=f"insta_{selected_font}.jpg",
+                        mime="image/jpeg"
+                    )
+
+                st.subheader("📝 Текст поста:")
+                st.write(st.session_state['final_text'])
