@@ -1,0 +1,6 @@
+streamlit
+pandas
+sqlalchemy
+openai
+pillow
+python-dotenv
